@@ -1,0 +1,21 @@
+# Local Python environments
+.venv/
+venv/
+
+# Local credentials
+.env
+.env.*
+
+# Generated files
+__pycache__/
+*.py[cod]
+.DS_Store
+
+# Local audio recordings
+*.m4a
+*.wav
+*.mp3
+*.aac
+*.ogg
+*.flac
+*.webm
