@@ -11,7 +11,7 @@ from typing import Annotated, Literal
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from google.genai import errors
 
-from translator import translate_audio
+from translator import translate_audio, translate_text
 
 app = FastAPI(title="Translation Backend")
 
@@ -106,6 +106,46 @@ async def test_translate(
             502, "Gemini returned an empty or invalid translation."
         ) from None
 
+class CorrectionRequest(BaseModel):
+    corrected_text: Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=True,
+            min_length=1,
+            max_length=5000,
+        ),
+    ]
+    target_language: Literal["Kannada", "Malayalam", "English"]
+
+
+@app.post("/translate/correction", response_model=dict[str, str])
+async def translate_correction(request: CorrectionRequest):
+    if not os.environ.get("GEMINI_API_KEY"):
+        raise HTTPException(
+            503, "The server's Gemini API key is not configured."
+        )
+
+    try:
+        async with asyncio.timeout(60):
+            return await translate_text(
+                corrected_text=request.corrected_text,
+                target_language=request.target_language,
+            )
+    except TimeoutError:
+        raise HTTPException(504, "Translation timed out.") from None
+    except errors.APIError as exc:
+        print(f"Gemini upstream error: HTTP {exc.code}", flush=True)
+        if exc.code == 429:
+            raise HTTPException(
+                429, "Gemini rate limit reached. Try again later."
+            ) from None
+        raise HTTPException(
+            502, "Gemini could not translate the correction."
+        ) from None
+    except (RuntimeError, ValidationError):
+        raise HTTPException(
+            502, "Gemini returned an empty or invalid translation."
+        ) from None
 
 class SpeakRequest(BaseModel):
     text: Annotated[
