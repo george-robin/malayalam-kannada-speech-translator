@@ -1,6 +1,12 @@
+import binascii
+
+from fastapi.responses import Response
+from pydantic import BaseModel, StringConstraints, ValidationError
+
+from speech import synthesize_speech
 import asyncio
 import os
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from google.genai import errors
@@ -37,6 +43,7 @@ async def test_audio(audio: UploadFile = File(...)):
         await audio.close()
 
 
+@app.post("/translate", response_model=dict[str, str])
 @app.post("/test/translate", response_model=dict[str, str])
 async def test_translate(
     audio: UploadFile = File(...),
@@ -94,7 +101,72 @@ async def test_translate(
         raise HTTPException(
             502, "Gemini could not process the recording."
         ) from None
-    except RuntimeError:
+    except (RuntimeError, ValidationError):
         raise HTTPException(
-            502, "Gemini returned no translation text."
+            502, "Gemini returned an empty or invalid translation."
         ) from None
+
+
+class SpeakRequest(BaseModel):
+    text: Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=True,
+            min_length=1,
+            max_length=5000,
+        ),
+    ]
+
+
+@app.post(
+    "/speak",
+    response_class=Response,
+    responses={200: {"content": {"audio/wav": {}}}},
+)
+async def speak(request: SpeakRequest):
+    if not os.environ.get("GEMINI_API_KEY"):
+        raise HTTPException(
+            503, "The server's Gemini API key is not configured."
+        )
+
+    try:
+        async with asyncio.timeout(60):
+            audio_bytes = await synthesize_speech(request.text)
+
+        if (
+            len(audio_bytes) < 12
+            or audio_bytes[:4] != b"RIFF"
+            or audio_bytes[8:12] != b"WAVE"
+        ):
+            raise RuntimeError("Invalid WAV response.")
+
+    except TimeoutError:
+        raise HTTPException(
+            504, "Speech generation timed out."
+        ) from None
+
+    except errors.APIError as exc:
+        print(
+            f"Gemini speech upstream error: HTTP {exc.code}",
+            flush=True,
+        )
+
+        if exc.code == 429:
+            raise HTTPException(
+                429, "Gemini rate limit reached. Try again later."
+            ) from None
+
+        raise HTTPException(
+            502, "Gemini could not generate speech."
+        ) from None
+
+    except (RuntimeError, ValidationError, binascii.Error):
+        raise HTTPException(
+            502, "Gemini returned empty or invalid speech audio."
+        ) from None
+
+    return Response(
+        content=audio_bytes,
+        media_type="audio/wav",
+        headers={"Cache-Control": "no-store"},
+    )
