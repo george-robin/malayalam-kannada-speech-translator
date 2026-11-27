@@ -208,7 +208,7 @@ The reviewed `main` tree contains no test audio files. The root `.gitignore` exc
 
 ## Credits and license
 
-Built by a three-person hackathon team, with work divided across the mobile frontend, FastAPI backend, and Gemini integration and evaluation. The frontend builds on the Expo starter project and includes its MIT notice in [frontend/LICENSE](frontend/LICENSE). A repository-wide license has not been added.
+Built by a two-person hackathon team, with work divided across the mobile frontend, FastAPI backend, and Gemini integration and evaluation. The frontend builds on the Expo starter project and includes its MIT notice in [frontend/LICENSE](frontend/LICENSE). A repository-wide license has not been added.
 
 The project uses Google's Gemini API and is independently developed, with no affiliation with or endorsement by Google. Project questions can be raised through [GitHub Issues](https://github.com/george-robin/malayalam-kannada-speech-translator/issues).
 
